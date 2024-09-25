@@ -277,7 +277,7 @@ func getDefaultBaseBranch() string {
 }
 
 func generateCommitMessage(diff, title, apiKey string) (string, error) {
-	prompt := fmt.Sprintf("Based on the following git diff and the context '%s', generate a concise commit message in English. Start with a brief summary line (50 characters or less), followed by a blank line, and then a more detailed explanation. Do not include any prefixes like 'title:' or 'changes:'. Here's the diff:\n\n%s", title, diff)
+	prompt := fmt.Sprintf("Based on the following git diff and the context '%s', generate a concise commit message in English. Start with a brief summary line (50 characters or less), followed by a blank line, and then a more detailed explanation. Do not include any prefixes like 'title:', '**Summary:**','**Details:**:'. Here's the diff:\n\n%s", title, diff)
 	return callOpenAI(prompt, apiKey)
 }
 
