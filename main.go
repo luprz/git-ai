@@ -17,7 +17,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "project-commit",
-	Short: "A git commit helper that uses ChatGPT to generate commit messages",
+	Short: "A git commit helper that uses ChatGPT to generate commit messages and PR descriptions",
 }
 
 var commitCmd = &cobra.Command{
@@ -32,8 +32,15 @@ var configCmd = &cobra.Command{
 	Run:   runConfig,
 }
 
+var prDescriptionCmd = &cobra.Command{
+	Use:   "pr-resume [base-branch] [compare-branch]",
+	Short: "Generate a structured PR description based on differences between two branches",
+	Args:  cobra.ExactArgs(2),
+	Run:   runPRDescription,
+}
+
 func init() {
-	rootCmd.AddCommand(commitCmd, configCmd)
+	rootCmd.AddCommand(commitCmd, configCmd, prDescriptionCmd)
 	viper.SetConfigName("config")
 	viper.SetConfigType("json")
 	viper.AddConfigPath("$HOME/.project-commit")
@@ -113,21 +120,21 @@ func runCommit(cmd *cobra.Command, args []string) {
 			fmt.Println(string(stagedFiles))
 		}
 
-		// Obtener el título del commit (primera línea del diff)
+		// Get the title of the commit (first line of the diff)
 		title := strings.Split(string(diff), "\n")[0]
 
-		// Generar descripción con ChatGPT
+		// Generate description with ChatGPT
 		description, err := generateCommitMessage(string(diff), title, apiKey)
 		if err != nil {
 			fmt.Println("Error generating commit message:", err)
 			return
 		}
 
-		// Imprimir la descripción generada
+		// Print the generated description
 		fmt.Println("\nGenerated commit message:")
 		fmt.Println(description)
 
-		// Preguntar al usuario si desea continuar
+		// Ask the user if they want to continue
 		fmt.Print("\nDo you want to proceed with git add . and commit? (y/n): ")
 		var response string
 		fmt.Scanln(&response)
@@ -136,7 +143,7 @@ func runCommit(cmd *cobra.Command, args []string) {
 			return
 		}
 
-		// Ejecutar git add .
+		// Execute git add .
 		cmd2 := exec.Command("git", "add", ".")
 		err = cmd2.Run()
 		if err != nil {
@@ -144,7 +151,7 @@ func runCommit(cmd *cobra.Command, args []string) {
 			return
 		}
 
-		// Ejecutar git commit -m
+		// Execute git commit -m
 		cmd2 = exec.Command("git", "commit", "-m", description)
 		err = cmd2.Run()
 		if err != nil {
@@ -165,6 +172,90 @@ func generateCommitMessage(diff, title, apiKey string) (string, error) {
 	requestBody, _ := json.Marshal(map[string]interface{}{
 		"model": "gpt-3.5-turbo",
 		"messages": []map[string]string{
+			{
+				"role":    "user",
+				"content": prompt,
+			},
+		},
+	})
+
+	req, err := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", bytes.NewBuffer(requestBody))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var result map[string]interface{}
+	json.Unmarshal(body, &result)
+
+	message := result["choices"].([]interface{})[0].(map[string]interface{})["message"].(map[string]interface{})["content"].(string)
+
+	return message, nil
+}
+
+func runPRDescription(cmd *cobra.Command, args []string) {
+	if err := viper.ReadInConfig(); err != nil {
+		fmt.Println("No config file found. Please run 'project-commit config' to set up your API key.")
+		return
+	}
+
+	apiKey := viper.GetString("openai_api_key")
+	if apiKey == "" {
+		fmt.Println("API key not found. Please run 'project-commit config' to set up your API key.")
+		return
+	}
+
+	baseBranch := args[0]
+	compareBranch := args[1]
+
+	// Get diff between branches
+	diff, err := exec.Command("git", "diff", baseBranch+".."+compareBranch).Output()
+	if err != nil {
+		fmt.Println("Error executing git diff:", err)
+		return
+	}
+
+	if string(diff) == "" {
+		fmt.Println("No differences detected between the branches.")
+		return
+	}
+
+	// Generate PR description
+	description, err := generatePRDescription(string(diff), baseBranch, compareBranch, apiKey)
+	if err != nil {
+		fmt.Println("Error generating PR description:", err)
+		return
+	}
+
+	// Print the generated description
+	fmt.Println("\nGenerated PR Description:")
+	fmt.Println(description)
+}
+
+func generatePRDescription(diff, baseBranch, compareBranch, apiKey string) (string, error) {
+	prompt := fmt.Sprintf("Generate a structured GitHub Pull Request description based on the following git diff between '%s' and '%s' branches. Use this format:\n\n## PR Title\n\n## PR Description\n\n## Changes Made\n\n## Instructions for Reviewer\n\n## Recommendations for Testing this PR\n\n## Concerns\n\n## Link to Related Issue(s)\n\nEnsure the content is clear, concise, and relevant to each heading. Here's the diff:\n\n%s", baseBranch, compareBranch, diff)
+
+	requestBody, _ := json.Marshal(map[string]interface{}{
+		"model": "gpt-3.5-turbo",
+		"messages": []map[string]string{
+			{
+				"role":    "system",
+				"content": "You are a PR description generator specialized in creating structured and detailed descriptions for GitHub Pull Requests. Focus on generating content in English, formatted in Markdown, and structured under the designated headings. Emphasize clarity, conciseness, and relevance in your responses.",
+			},
 			{
 				"role":    "user",
 				"content": prompt,
