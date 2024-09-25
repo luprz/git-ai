@@ -55,7 +55,7 @@ func init() {
 		Run:   runReleaseDescription,
 	}
 
-	rootCmd.AddCommand(commitCmd, configCmd, prDescriptionCmd, releaseCmd)
+	rootCmd.AddCommand(commitCmd, configCmd, prDescriptionCmd)
 	viper.SetConfigName("config")
 	viper.SetConfigType("json")
 	viper.AddConfigPath("$HOME/.project-commit")
