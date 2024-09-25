@@ -17,7 +17,7 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "project-commit",
+	Use:   "git-ai",
 	Short: "A git commit helper that uses ChatGPT to generate commit messages and PR descriptions",
 }
 
