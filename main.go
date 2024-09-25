@@ -33,9 +33,9 @@ var configCmd = &cobra.Command{
 }
 
 var prDescriptionCmd = &cobra.Command{
-	Use:   "pr-resume [base-branch] [compare-branch]",
-	Short: "Generate a structured PR description based on differences between two branches",
-	Args:  cobra.ExactArgs(2),
+	Use:   "pr [base-branch]",
+	Short: "Generate a structured PR description based on differences between the current branch and the specified base branch",
+	Args:  cobra.MaximumNArgs(1),
 	Run:   runPRDescription,
 }
 
@@ -219,23 +219,35 @@ func runPRDescription(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	baseBranch := args[0]
-	compareBranch := args[1]
+	// Get current branch
+	currentBranch, err := getCurrentBranch()
+	if err != nil {
+		fmt.Println("Error getting current branch:", err)
+		return
+	}
+
+	// Determine base branch
+	var baseBranch string
+	if len(args) > 0 {
+		baseBranch = args[0]
+	} else {
+		baseBranch = getDefaultBaseBranch()
+	}
 
 	// Get diff between branches
-	diff, err := exec.Command("git", "diff", baseBranch+".."+compareBranch).Output()
+	diff, err := exec.Command("git", "diff", baseBranch+".."+currentBranch).Output()
 	if err != nil {
 		fmt.Println("Error executing git diff:", err)
 		return
 	}
 
 	if string(diff) == "" {
-		fmt.Println("No differences detected between the branches.")
+		fmt.Println("No differences detected between the current branch and", baseBranch)
 		return
 	}
 
 	// Generate PR description
-	description, err := generatePRDescription(string(diff), baseBranch, compareBranch, apiKey)
+	description, err := generatePRDescription(string(diff), baseBranch, currentBranch, apiKey)
 	if err != nil {
 		fmt.Println("Error generating PR description:", err)
 		return
@@ -244,6 +256,32 @@ func runPRDescription(cmd *cobra.Command, args []string) {
 	// Print the generated description
 	fmt.Println("\nGenerated PR Description:")
 	fmt.Println(description)
+}
+
+func getCurrentBranch() (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func getDefaultBaseBranch() string {
+	// Check for main branch
+	cmd := exec.Command("git", "rev-parse", "--verify", "main")
+	if err := cmd.Run(); err == nil {
+		return "main"
+	}
+
+	// Check for master branch
+	cmd = exec.Command("git", "rev-parse", "--verify", "master")
+	if err := cmd.Run(); err == nil {
+		return "master"
+	}
+
+	// If neither main nor master exists, return an empty string
+	return ""
 }
 
 func generatePRDescription(diff, baseBranch, compareBranch, apiKey string) (string, error) {
