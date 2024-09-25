@@ -161,8 +161,7 @@ func runCommit(cmd *cobra.Command, args []string) {
 }
 
 func generateCommitMessage(diff, title, apiKey string) (string, error) {
-	prompt := fmt.Sprintf("Based on the following git diff and the title '%s', generate a concise commit message in English with a title and a list of changes:\n\n%s", title, diff)
-
+	prompt := fmt.Sprintf("Based on the following git diff and the context '%s', generate a concise commit message in English. Start with a brief summary line (50 characters or less), followed by a blank line, and then a more detailed explanation. Do not include any prefixes like 'title:' or 'changes:'. Here's the diff:\n\n%s", title, diff)
 	requestBody, _ := json.Marshal(map[string]interface{}{
 		"model": "gpt-3.5-turbo",
 		"messages": []map[string]string{
