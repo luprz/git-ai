@@ -58,7 +58,7 @@ func init() {
 
 	reviewCmd = &cobra.Command{
 		Use:   "pr-review [base-branch]",
-		Short: "Genera una revisión del PR basada en las diferencias entre la rama actual y la rama base especificada",
+		Short: "Generate a PR review based on the differences between the current branch and the specified base branch",
 		Args:  cobra.MaximumNArgs(1),
 		Run:   runPRReview,
 	}
