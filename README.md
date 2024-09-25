@@ -21,7 +21,7 @@ If you don't have Go installed on your system, you can use the pre-compiled bina
 
    - On macOS and Linux:
      ```
-     sudo mv git-ai /usr/local/bin/
+     sudo mv builds/git-ai /usr/local/bin/
      ```
    - On Windows: 
      Move the `git-ai.exe` to a directory in your PATH, or add the directory containing `git-ai.exe` to your PATH environment variable.
