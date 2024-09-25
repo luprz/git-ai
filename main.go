@@ -26,6 +26,7 @@ var (
 	configCmd        *cobra.Command
 	prDescriptionCmd *cobra.Command
 	releaseCmd       *cobra.Command
+	reviewCmd        *cobra.Command
 )
 
 func init() {
@@ -55,7 +56,14 @@ func init() {
 		Run:   runReleaseDescription,
 	}
 
-	rootCmd.AddCommand(commitCmd, configCmd, prDescriptionCmd)
+	reviewCmd = &cobra.Command{
+		Use:   "pr-review [base-branch]",
+		Short: "Genera una revisión del PR basada en las diferencias entre la rama actual y la rama base especificada",
+		Args:  cobra.MaximumNArgs(1),
+		Run:   runPRReview,
+	}
+
+	rootCmd.AddCommand(commitCmd, configCmd, prDescriptionCmd, reviewCmd)
 	viper.SetConfigName("config")
 	viper.SetConfigType("json")
 	viper.AddConfigPath("$HOME/.project-commit")
@@ -366,4 +374,55 @@ func callOpenAI(prompt, apiKey string) (string, error) {
 	message := result["choices"].([]interface{})[0].(map[string]interface{})["message"].(map[string]interface{})["content"].(string)
 
 	return message, nil
+}
+
+func runPRReview(cmd *cobra.Command, args []string) {
+	if err := viper.ReadInConfig(); err != nil {
+		fmt.Println("No se encontró el archivo de configuración. Por favor, ejecuta 'project-commit config' para configurar tu clave API.")
+		return
+	}
+
+	apiKey := viper.GetString("openai_api_key")
+	if apiKey == "" {
+		fmt.Println("Clave API no encontrada. Por favor, ejecuta 'project-commit config' para configurar tu clave API.")
+		return
+	}
+
+	currentBranch, err := getCurrentBranch()
+	if err != nil {
+		fmt.Println("Error al obtener la rama actual:", err)
+		return
+	}
+
+	var baseBranch string
+	if len(args) > 0 {
+		baseBranch = args[0]
+	} else {
+		baseBranch = getDefaultBaseBranch()
+	}
+
+	diff, err := exec.Command("git", "diff", baseBranch+".."+currentBranch).Output()
+	if err != nil {
+		fmt.Println("Error al ejecutar git diff:", err)
+		return
+	}
+
+	if string(diff) == "" {
+		fmt.Println("No se detectaron diferencias entre la rama actual y", baseBranch)
+		return
+	}
+
+	review, err := generatePRReview(string(diff), baseBranch, currentBranch, apiKey)
+	if err != nil {
+		fmt.Println("Error al generar la revisión del PR:", err)
+		return
+	}
+
+	fmt.Println("\nRevisión del PR generada:")
+	fmt.Println(review)
+}
+
+func generatePRReview(diff, baseBranch, compareBranch, apiKey string) (string, error) {
+	prompt := fmt.Sprintf("Como revisor de código, por favor proporciona una revisión completa de los siguientes cambios entre las ramas '%s' y '%s'. Destaca posibles problemas, sugiere mejoras y reconoce buenas prácticas. Sé constructivo y enfócate en la calidad del código, rendimiento, seguridad y mantenibilidad. Aquí está el diff:\n\n%s", baseBranch, compareBranch, diff)
+	return callOpenAI(prompt, apiKey)
 }
